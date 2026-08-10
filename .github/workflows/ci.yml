@@ -2,12 +2,11 @@ name: CI
 
 on:
   pull_request:
-  push:
-    branches:
-      - master
-      - "feature/**"
-      - "fix/**"
-      - "refactor/**"
+  workflow_dispatch:
+
+concurrency:
+  group: webapp-core-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
