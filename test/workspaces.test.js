@@ -17,10 +17,10 @@ function catalog(role = "admin") {
 }
 
 test("maps verified roles to the smallest permitted workspace set", () => {
-  assert.deepEqual(workspaceSectionsForRole("client"), ["market"]);
-  assert.deepEqual(workspaceSectionsForRole("broker"), ["market", "listings"]);
-  assert.deepEqual(workspaceSectionsForRole("admin"), ["market", "listings", "admin"]);
-  assert.deepEqual(workspaceSectionsForRole("unknown"), ["market"]);
+  assert.deepEqual(workspaceSectionsForRole("client"), ["market", "trading"]);
+  assert.deepEqual(workspaceSectionsForRole("broker"), ["market", "trading", "listings"]);
+  assert.deepEqual(workspaceSectionsForRole("admin"), ["market", "trading", "listings", "admin"]);
+  assert.deepEqual(workspaceSectionsForRole("unknown"), ["market", "trading"]);
 });
 
 test("summarizes the catalog without mutating it", () => {

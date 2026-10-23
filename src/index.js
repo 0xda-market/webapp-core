@@ -31,7 +31,8 @@ export function createBootstrapContext(document, engine = bundledEngine, locale 
       role: rawSession.role || null,
       status: rawSession.status || null,
       subject: rawSession.subject || null,
-      environment: rawSession.environment || metadata.environment || null
+      environment: rawSession.environment || metadata.environment || null,
+      paper_trading_enabled: rawSession.paper_trading_enabled === true
     },
     currencies: [...new Set(currencies)]
   });
@@ -395,3 +396,4 @@ export { createAdminProductController, mountAdminCreateProduct } from "./admin-c
 export { createAdminPricingController, mountAdminPrices } from "./admin-prices.js";
 export { mountWorkspaceNavigation, workspaceSectionsForRole } from "./workspace-navigation.js";
 export * from "./engine.js";
+export { mountTradingWorkspace, parseReplayEvents } from "./trading-workspace.js";

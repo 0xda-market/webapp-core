@@ -80,9 +80,9 @@ Workspace visibility derives only from the verified session supplied by the host
 
 | Role | Sections |
 | --- | --- |
-| `client` | Market |
-| `broker` | Market, Listings |
-| `admin` | Market, Listings, Administration |
+| `client` | Market, Trading (when the trusted host enables paper simulation) |
+| `broker` | Market, Trading (when enabled), Listings |
+| `admin` | Market, Trading (when enabled), Listings, Administration |
 
 `mountWorkspaceNavigation` controls section visibility without interpreting channel authentication. `mountAdminWorkspace` composes isolated administrator capabilities rather than creating one privileged catch-all surface.
 
@@ -192,3 +192,7 @@ A successful health-gated deployment publishes the `deploy/vps-webapp-developmen
 npm run check
 npm test
 ```
+
+## Paper trading workspace
+
+Hosts with a trusted `replayTrading({ events, options })` transport method can mount `mountTradingWorkspace({ document, transport, locale })` as a `trading` workspace tab for all user roles. The shared UI owns the JSONL input, risk options and paper equity/PnL display; the host owns Telegram authentication and the private RPC to Trading Lab. No exchange order or wallet operation is exposed.
