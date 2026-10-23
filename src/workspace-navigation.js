@@ -1,13 +1,14 @@
 import { createI18n } from "./i18n.js";
 
 const ROLE_SECTIONS = Object.freeze({
-  client: Object.freeze(["market"]),
-  broker: Object.freeze(["market", "listings"]),
-  admin: Object.freeze(["market", "listings", "admin"])
+  client: Object.freeze(["market", "trading"]),
+  broker: Object.freeze(["market", "trading", "listings"]),
+  admin: Object.freeze(["market", "trading", "listings", "admin"])
 });
 
 const SECTION_ICONS = Object.freeze({
   market: "⌂",
+  trading: "↗",
   listings: "≡",
   admin: "◇"
 });

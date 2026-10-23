@@ -188,3 +188,7 @@ A successful health-gated deployment publishes the `deploy/vps-webapp-developmen
 npm run check
 npm test
 ```
+
+## Paper trading workspace
+
+Hosts with a trusted `replayTrading({ events, options })` transport method can mount `mountTradingWorkspace({ document, transport, locale })` as a `trading` workspace tab for all user roles. The shared UI owns the JSONL input, risk options and paper equity/PnL display; the host owns Telegram authentication and the private RPC to Trading Lab. No exchange order or wallet operation is exposed.
