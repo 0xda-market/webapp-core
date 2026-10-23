@@ -76,9 +76,9 @@ Workspace visibility derives only from the verified session supplied by the host
 
 | Role | Sections |
 | --- | --- |
-| `client` | Market |
-| `broker` | Market, Listings |
-| `admin` | Market, Listings, Administration |
+| `client` | Market, Trading (when the trusted host enables paper simulation) |
+| `broker` | Market, Trading (when enabled), Listings |
+| `admin` | Market, Trading (when enabled), Listings, Administration |
 
 `mountWorkspaceNavigation` controls section visibility without interpreting channel authentication. `mountAdminWorkspace` composes isolated administrator capabilities rather than creating one privileged catch-all surface.
 
