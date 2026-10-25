@@ -52,5 +52,7 @@ jobs:
             exit 1
           }
 
-          curl --fail --silent --show-error http://127.0.0.1:1703/index.js |
-            grep -q "mountMarketApp"
+          curl --fail --silent --show-error \
+            --output "$RUNNER_TEMP/market-webapp-index.js" \
+            http://127.0.0.1:1703/index.js
+          grep -q "mountMarketApp" "$RUNNER_TEMP/market-webapp-index.js"
