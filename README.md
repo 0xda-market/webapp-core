@@ -183,7 +183,7 @@ The `development` GitHub Environment requires a single producer secret:
 are no longer read from this repository's deployment workflow.
 
 The private nginx service uses the canonical test port `1703` on `nilx-edge`
-and alias `market-web-app`. It does not add public ingress and is separate
+and alias `market-webapp-development`. It does not add public ingress and is separate
 from the Telegram bot's imported shared UI. The Telegram Mini App deliberately
 pins a specific `webapp-core` commit in its host adapter; coordinate that pin
 before deploying a complete Market stack.
