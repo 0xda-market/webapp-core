@@ -178,8 +178,9 @@ through the `market-webapp-development` workload in
 checks the exact infra run's activation/health result.
 
 The `development` GitHub Environment requires a single producer secret:
-`INFRA_DEPLOY_TOKEN` (permission to dispatch and read
-`aiaiaiai-org/infra` workflows). VPS `SSH_*` settings belong to infra and
+`INFRA_DEPLOY_TOKEN` (fine-grained access to `aiaiaiai-org/infra`:
+**Contents: read/write** for `repository_dispatch`, **Actions: read** for
+workflow results/artifacts). VPS `SSH_*` settings belong to infra and
 are no longer read from this repository's deployment workflow.
 
 The private nginx service uses the canonical test port `1703` on `nilx-edge`
