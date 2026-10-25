@@ -1,0 +1,56 @@
+# © 2026 aiaiaiai · aiaiaiai.org
+# SPDX-License-Identifier: MIT
+name: Validate for deploy
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/validate-for-deploy.yml"
+      - ".github/workflows/deploy-development.yml"
+      - "Dockerfile"
+      - "deploy/**"
+      - "src/**"
+      - "test/deploy-workflow.test.js"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: market-webapp-validate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  runtime-smoke:
+    name: Build image and verify runtime HTTP contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Build deployment image without publishing
+        run: docker build --tag market-webapp-deploy-validation:${{ github.sha }} .
+
+      - name: Verify HTTP readiness and bundled module
+        run: |
+          set -Eeuo pipefail
+          docker run --detach --name market-webapp-deploy-validation             --publish 127.0.0.1:1703:1703             "market-webapp-deploy-validation:$GITHUB_SHA"
+          trap 'docker rm --force market-webapp-deploy-validation >/dev/null 2>&1 || true' EXIT
+
+          ready=0
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:1703/health | grep -qx ok; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          [[ "$ready" == 1 ]] || {
+            docker logs market-webapp-deploy-validation
+            echo "::error::WebApp nginx health contract is not ready on 1703." >&2
+            exit 1
+          }
+
+          curl --fail --silent --show-error http://127.0.0.1:1703/index.js |
+            grep -q "mountMarketApp"
