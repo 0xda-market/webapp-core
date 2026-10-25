@@ -169,22 +169,27 @@ Hosts must consume an immutable commit or released package version. Mutable defa
 
 ## Deployment
 
-The repository has one `Deploy` workflow.
+`webapp-core` has one **manual development deployment**, implemented by
+`.github/workflows/deploy-development.yml`. Its `master` SHA must have a successful
+push-triggered Full CI run before the workflow will publish an immutable
+`ghcr.io/0xda-market/webapp-core@sha256:…` image. This image is activated
+through the `market-webapp-development` workload in
+[`aiaiaiai-org/infra`](https://github.com/aiaiaiai-org/infra); the producer
+checks the exact infra run's activation/health result.
 
-- automatic deployment runs only when a pull request into `master` is actually merged;
-- synchronizing or updating an open pull request does not create a deployment run;
-- closing a pull request without merging skips the deploy job;
-- manual dispatch requires an explicit source branch, tag, or commit and an environment;
-- only the `development` runtime is currently supported by `deploy/deploy.sh`.
+The `development` GitHub Environment requires a single producer secret:
+`INFRA_DEPLOY_TOKEN` (permission to dispatch and read
+`aiaiaiai-org/infra` workflows). VPS `SSH_*` settings belong to infra and
+are no longer read from this repository's deployment workflow.
 
-The `development` GitHub environment requires:
+The private nginx service uses the canonical test port `1703` on `nilx-edge`
+and alias `market-web-app`. It does not add public ingress and is separate
+from the Telegram bot's imported shared UI. The Telegram Mini App deliberately
+pins a specific `webapp-core` commit in its host adapter; coordinate that pin
+before deploying a complete Market stack.
 
-- secrets: `SSH_HOST`, `SSH_USER` and `SSH_PRIVATE_KEY`;
-- variable: `SSH_DEPLOYMENT_PATH`.
-
-`SSH_DEPLOYMENT_PATH` is the same shared base path used by `core`. WebApp releases remain isolated under `<SSH_DEPLOYMENT_PATH>/webapp-core/environments/development`. The SSH port is fixed to `22022` by the workflow.
-
-A successful health-gated deployment publishes the `deploy/vps-webapp-development` commit status on the exact release SHA. A failed deployment publishes the same context as `failure`.
+Deployment is never triggered by a PR, merge, or CI completion. Production
+activation is not available here.
 
 ## Validation
 
