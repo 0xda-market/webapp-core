@@ -101,14 +101,14 @@ jobs:
           baseline="$(gh api --method GET "$runs_endpoint?event=repository_dispatch&per_page=1" --jq '.workflow_runs[0].id // 0')"
           [[ "$baseline" =~ ^[0-9]+$ ]]
           echo "BASELINE_RUN_ID=$baseline" >> "$GITHUB_ENV"
-          jq -nc --arg workload "$WORKLOAD" --arg image "$IMAGE_REF"             '{event_type: "deploy-workload", client_payload: {workload: $workload, image: $image}}' |
+          jq -nc --arg workload "$WORKLOAD" --arg image "$IMAGE_REF" --arg request_id "$GITHUB_RUN_ID"             '{event_type: "deploy-workload", client_payload: {workload: $workload, image: $image, request_id: $request_id}}' |
             gh api --method POST "repos/$INFRA_REPOSITORY/dispatches" --input -
 
       - name: Await infra activation and health
         run: |
           set -Eeuo pipefail
           runs_endpoint="repos/$INFRA_REPOSITORY/actions/workflows/deploy-workload.yml/runs"
-          title="Deploy $WORKLOAD"
+          title="Deploy $WORKLOAD / $GITHUB_RUN_ID"
           for attempt in $(seq 1 90); do
             response="$(gh api --method GET "$runs_endpoint?event=repository_dispatch&per_page=100")"
             match="$(jq -c --arg title "$title" --argjson baseline "$BASELINE_RUN_ID" '
