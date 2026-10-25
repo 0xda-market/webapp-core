@@ -30,3 +30,11 @@ test("deployment produces immutable GHCR image and delegates activation to infra
   assert.doesNotMatch(workflow, /SSH_(HOST|USER|PRIVATE_KEY|PORT|DEPLOYMENT_PATH)/);
   assert.doesNotMatch(workflow, /\bscp\b|\bssh\s+-/);
 });
+
+test("all WebApp runtimes agree on canonical isolated test port", () => {
+  for (const file of ["../Dockerfile", "../deploy/nginx.conf", "../deploy/compose.yaml", "../deploy/deploy.sh"]) {
+    const source = readFileSync(new URL(file, import.meta.url), "utf8");
+    assert.match(source, /1703/);
+    assert.doesNotMatch(source, /8080/);
+  }
+});
