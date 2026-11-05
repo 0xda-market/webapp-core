@@ -10,10 +10,10 @@ const COPY = Object.freeze({
     pending: "Running simulation…", equity: "Paper equity", pnl: "Net PnL",
     realized: "Realized PnL", fills: "Fills", rejects: "Rejected", hint: "Every signal fills only on a later quote, never retrospectively.",
     leaders: "OKX lead traders", leadersHint: "Public OKX ranking for research. Past 90-day results are survivorship-biased and are not a recommendation to copy anyone.",
-    sort: "Sort by", minLeadDays: "Minimum track record", anyDays: "Any", days: "days", load: "Load ranking", loading: "Loading ranking…",
+    sort: "Sort by", minLeadDays: "Minimum track record", anyDays: "Any", dayForms: { one: "day", other: "days" }, load: "Load ranking", loading: "Loading ranking…",
     sorts: { pnl_ratio: "90-day return", pnl: "90-day PnL", win_ratio: "Win ratio", aum: "Assets under management", overview: "OKX overview" },
     ret90: "90-day return", pnl90: "90-day PnL", winRatio: "Win ratio", leadDays: "Leading for", copiers: "Copiers",
-    capacity: "has free slots (copying availability unknown)", full: "no free slots", snapshot: "OKX snapshot", empty: "No traders match these filters."
+    capacity: "has free slots (copying availability unknown)", full: "no free slots", capacityUnknown: "free slots unknown", snapshot: "OKX snapshot", empty: "No traders match these filters."
   }),
   uk: Object.freeze({
     title: "Trading Lab", description: "Лише симуляція. Без реальних коштів чи угод на біржі.",
@@ -23,10 +23,10 @@ const COPY = Object.freeze({
     pending: "Обчислення…", equity: "Умовний баланс", pnl: "Чистий PnL",
     realized: "Реалізований PnL", fills: "Виконано", rejects: "Відхилено", hint: "Сигнал виконується лише за наступною котировкою, не заднім числом.",
     leaders: "Лідери OKX", leadersHint: "Публічний рейтинг OKX для дослідження. Результати за 90 днів мають ефект виживання й не є порадою когось копіювати.",
-    sort: "Сортувати за", minLeadDays: "Мінімальний стаж", anyDays: "Будь-який", days: "днів", load: "Завантажити рейтинг", loading: "Завантаження рейтингу…",
+    sort: "Сортувати за", minLeadDays: "Мінімальний стаж", anyDays: "Будь-який", dayForms: { one: "день", few: "дні", many: "днів", other: "дня" }, load: "Завантажити рейтинг", loading: "Завантаження рейтингу…",
     sorts: { pnl_ratio: "Дохідність за 90 днів", pnl: "PnL за 90 днів", win_ratio: "Частка прибуткових", aum: "Активи в управлінні", overview: "Огляд OKX" },
     ret90: "Дохідність за 90 днів", pnl90: "PnL за 90 днів", winRatio: "Частка прибуткових", leadDays: "Веде угоди", copiers: "Копіювальники",
-    capacity: "є вільні місця (чи відкрите копіювання — невідомо)", full: "вільних місць немає", snapshot: "Знімок OKX", empty: "Немає трейдерів за цими фільтрами."
+    capacity: "є вільні місця (чи відкрите копіювання — невідомо)", full: "вільних місць немає", capacityUnknown: "наявність місць невідома", snapshot: "Знімок OKX", empty: "Немає трейдерів за цими фільтрами."
   })
 });
 const DEMO = [
@@ -64,30 +64,54 @@ export function leaderQuery({ sort = "pnl_ratio", minLeadDays = "", limit = 20 }
   return query;
 }
 
-// Formats a decimal ratio string ("1.6898" -> "+168.98%") by moving the decimal point, never through floats.
-export function formatPercent(ratio) {
-  const text = String(ratio ?? "");
-  if (!DECIMAL.test(text)) return "—";
+// Rounds a decimal string half away from zero to `places` decimals using BigInt, never floats.
+// `shift` multiplies by 10^shift first (2 turns a ratio into percent). Returns null for non-decimal input.
+function roundDecimal(value, places, shift = 0) {
+  const text = String(value ?? "");
+  if (!DECIMAL.test(text)) return null;
   const negative = text.startsWith("-");
   const [whole, fraction = ""] = text.replace("-", "").split(".");
-  const digits = `${whole}${fraction.padEnd(2, "0")}`;
-  const point = whole.length + 2;
-  const integer = digits.slice(0, point).replace(/^0+(?=\d)/, "");
-  const decimals = digits.slice(point, point + 2).replace(/0+$/, "");
-  const value = decimals ? `${integer}.${decimals}` : integer;
-  if (/^0(\.0*)?$/.test(value)) return "0%";
-  return `${negative ? "−" : "+"}${value}%`;
+  const scale = fraction.length - shift;
+  let units = BigInt(`${whole}${fraction}`);
+  if (scale > places) {
+    const divisor = 10n ** BigInt(scale - places);
+    units = (units + divisor / 2n) / divisor;
+  } else {
+    units *= 10n ** BigInt(places - scale);
+  }
+  let digits = units.toString().padStart(places + 1, "0");
+  let result = places ? `${digits.slice(0, -places)}.${digits.slice(-places)}`.replace(/\.?0+$/, "") : digits;
+  if (units === 0n) return "0";
+  return negative ? `-${result}` : result;
 }
 
+// "1.6898" -> "+168.98%", rounded half away from zero to 2 decimals.
+export function formatPercent(ratio) {
+  const value = roundDecimal(ratio, 2, 2);
+  if (value === null) return "—";
+  if (value === "0") return "0%";
+  return value.startsWith("-") ? `−${value.slice(1)}%` : `+${value}%`;
+}
+
+// Amount rounded half away from zero to 2 decimals; negative zero becomes "0".
 export function formatAmount(amount) {
-  const text = String(amount ?? "");
-  if (!DECIMAL.test(text)) return "—";
-  const [whole, fraction = ""] = text.split(".");
-  const cents = fraction.slice(0, 2).replace(/0+$/, "");
-  return cents ? `${whole}.${cents}` : whole;
+  const value = roundDecimal(amount, 2);
+  return value === null ? "—" : value;
 }
 
-function mountLeaderboard(document, transport, t) {
+export function formatDays(count, locale = "en_US") {
+  const t = COPY[String(locale).toLowerCase().startsWith("uk") ? "uk" : "en"];
+  const form = new Intl.PluralRules(t === COPY.uk ? "uk" : "en").select(count);
+  return `${count} ${t.dayForms[form] || t.dayForms.other}`;
+}
+
+function capacityText(trader, t) {
+  if (trader.has_capacity === true) return t.capacity;
+  if (trader.has_capacity === false) return t.full;
+  return t.capacityUnknown;
+}
+
+function mountLeaderboard(document, transport, t, locale) {
   const section = element(document, "section", null, "trading-leaders");
   section.append(element(document, "h3", t.leaders), element(document, "p", t.leadersHint, "trading-hint"));
   const form = element(document, "form", null, "trading-form");
@@ -105,7 +129,7 @@ function mountLeaderboard(document, transport, t) {
     return input;
   };
   const sort = select(t.sort, SORTS, (value) => t.sorts[value]);
-  const minLeadDays = select(t.minLeadDays, LEAD_DAYS, (value) => (value ? `${value} ${t.days}` : t.anyDays));
+  const minLeadDays = select(t.minLeadDays, LEAD_DAYS, (value) => (value ? formatDays(Number(value), locale) : t.anyDays));
   const submit = element(document, "button", t.load, "primary-action");
   submit.type = "submit";
   form.append(submit);
@@ -124,6 +148,7 @@ function mountLeaderboard(document, transport, t) {
     status.textContent = t.loading;
     list.replaceChildren();
     try {
+      // The UI always asks for the first page of 20 (leaderQuery's default limit); hosts may pass a smaller limit.
       const page = await transport.tradingLeaders(leaderQuery({ sort: sort.value, minLeadDays: minLeadDays.value }));
       const traders = Array.isArray(page?.traders) ? page.traders : [];
       for (const trader of traders) {
@@ -131,13 +156,14 @@ function mountLeaderboard(document, transport, t) {
         item.append(
           element(document, "strong", String(trader.nickname || trader.unique_code || "—")),
           element(document, "p", `${t.ret90}: ${formatPercent(trader.pnl_ratio_90d)} · ${t.pnl90}: ${formatAmount(trader.pnl_90d)} ${trader.margin_currency || "USDT"}`),
-          element(document, "p", `${t.winRatio}: ${formatPercent(trader.win_ratio).replace("+", "")} · ${t.leadDays}: ${Number.isInteger(trader.lead_days) ? trader.lead_days : "—"} ${t.days}`),
-          element(document, "p", `${t.copiers}: ${trader.copy_traders ?? "—"}/${trader.max_copy_traders ?? "—"} · ${trader.has_capacity ? t.capacity : t.full}`)
+          element(document, "p", `${t.winRatio}: ${formatPercent(trader.win_ratio).replace("+", "")} · ${t.leadDays}: ${Number.isInteger(trader.lead_days) ? formatDays(trader.lead_days, locale) : "—"}`),
+          element(document, "p", `${t.copiers}: ${trader.copy_traders ?? "—"}/${trader.max_copy_traders ?? "—"} · ${capacityText(trader, t)}`)
         );
         list.append(item);
       }
       status.textContent = traders.length ? `${t.snapshot}: ${String(page.data_version || "—")}` : t.empty;
     } catch (error) {
+      // Host transports return user-safe messages (the bot passes only short validation text); shown as text only.
       status.textContent = String(error?.message || error);
     } finally {
       submit.disabled = false;
@@ -201,7 +227,7 @@ export function mountTradingWorkspace({ document, transport, locale = "en_US" })
   form.prepend(dataLabel, sample);
   form.append(submit);
   root.append(header);
-  if (typeof transport.tradingLeaders === "function") root.append(mountLeaderboard(document, transport, t));
+  if (typeof transport.tradingLeaders === "function") root.append(mountLeaderboard(document, transport, t, locale));
   root.append(form, status, result);
 
   let inFlight = false;

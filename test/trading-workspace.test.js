@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseReplayEvents } from "../src/trading-workspace.js";
+import { parseReplayEvents, mountTradingWorkspace, leaderQuery, formatPercent, formatAmount, formatDays } from "../src/trading-workspace.js";
+import { FakeElement } from "./helpers.js";
 import { createBootstrapContext } from "../src/index.js";
 import { createI18n } from "../src/i18n.js";
 
@@ -26,8 +27,6 @@ test("paper trading capability survives the signed bootstrap context only when e
   assert.equal(createI18n("uk_UA").t("workspace.trading"), "Трейдинг");
 });
 
-import { mountTradingWorkspace, leaderQuery, formatPercent, formatAmount } from "../src/trading-workspace.js";
-import { FakeElement } from "./helpers.js";
 
 const fakeDocument = { createElement: (tag) => new FakeElement(tag) };
 const walk = (node, out = []) => { out.push(node); for (const child of node.children || []) walk(child, out); return out; };
@@ -52,6 +51,24 @@ test("decimal strings are formatted without floating point drift", () => {
   assert.equal(formatAmount("1e3"), "—");
 });
 
+test("decimal formatting rounds half away from zero and normalizes negative zero", () => {
+  assert.equal(formatPercent("0.99999"), "+100%");
+  assert.equal(formatPercent("0.123449"), "+12.34%");
+  assert.equal(formatPercent("0.123450"), "+12.35%");
+  assert.equal(formatPercent("-0.123450"), "−12.35%");
+  assert.equal(formatPercent("-0.00001"), "0%");
+  assert.equal(formatAmount("0.999"), "1");
+  assert.equal(formatAmount("48805.115"), "48805.12");
+  assert.equal(formatAmount("-12.005"), "-12.01");
+  assert.equal(formatAmount("-0.001"), "0");
+  assert.equal(formatAmount("-0"), "0");
+});
+
+test("lead days use locale plural forms", () => {
+  assert.deepEqual([1, 2, 5, 21].map((n) => formatDays(n, "uk_UA")), ["1 день", "2 дні", "5 днів", "21 день"]);
+  assert.deepEqual([1, 2, 5, 21].map((n) => formatDays(n, "en_US")), ["1 day", "2 days", "5 days", "21 days"]);
+});
+
 test("leaderboard is shown only when the transport supports it", () => {
   const replayOnly = mountTradingWorkspace({ document: fakeDocument, transport: { replayTrading() {} }, locale: "uk_UA" });
   assert.ok(!walk(replayOnly.root).some((node) => node.className === "trading-leaders"));
@@ -69,7 +86,8 @@ test("leaderboard renders ranked traders as text with honest capacity wording", 
           { nickname: "<img src=x onerror=alert(1)>", unique_code: "540D011FDACCB47A", pnl_ratio_90d: "1.6898", pnl_90d: "48805.11",
             margin_currency: "USDT", win_ratio: "0.6957", lead_days: 156, copy_traders: 999, max_copy_traders: 1000, has_capacity: true },
           { unique_code: "381749205163847291", pnl_ratio_90d: "-0.05", pnl_90d: "-12.5", win_ratio: "0.4", lead_days: 30,
-            copy_traders: 10, max_copy_traders: 10, has_capacity: false }
+            copy_traders: 10, max_copy_traders: 10, has_capacity: false },
+          { unique_code: "213E8C92DC61EFAC", pnl_ratio_90d: "0.1", lead_days: 1 }
         ]
       };
     }
@@ -83,13 +101,15 @@ test("leaderboard renders ranked traders as text with honest capacity wording", 
   await form.dispatch("submit");
   assert.deepEqual(calls, [{ sort: "win_ratio", limit: "20", min_lead_days: "90" }]);
   const items = walk(section).filter((node) => node.className === "trading-leader");
-  assert.equal(items.length, 2);
+  assert.equal(items.length, 3);
   const first = texts(items[0]).join(" | ");
   assert.match(first, /<img src=x onerror=alert\(1\)>/);
   assert.match(first, /\+168\.98%/);
   assert.match(first, /69\.57%/);
   assert.match(first, /999\/1000 · є вільні місця \(чи відкрите копіювання — невідомо\)/);
-  assert.match(texts(items[1]).join(" | "), /381749205163847291.*−5%.*вільних місць немає/);
+  assert.match(texts(items[1]).join(" | "), /381749205163847291.*−5%.*30 днів.*вільних місць немає/);
+  assert.match(texts(items[2]).join(" | "), /1 день.*наявність місць невідома/);
+  assert.match(first, /156 днів/);
   assert.ok(!walk(section).some((node) => "innerHTML" in node));
   assert.match(texts(section).join(" "), /не є порадою когось копіювати/);
   assert.match(texts(section).join(" "), /Знімок OKX: 20261105150001/);
