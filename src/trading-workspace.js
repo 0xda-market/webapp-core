@@ -8,7 +8,12 @@ const COPY = Object.freeze({
     startingCash: "Initial USDT", tradeNotional: "Trade USDT", fee: "Fee (bps)",
     slippage: "Slippage (bps)", allocation: "Max allocation", submit: "Run simulation",
     pending: "Running simulation…", equity: "Paper equity", pnl: "Net PnL",
-    realized: "Realized PnL", fills: "Fills", rejects: "Rejected", hint: "Every signal fills only on a later quote, never retrospectively."
+    realized: "Realized PnL", fills: "Fills", rejects: "Rejected", hint: "Every signal fills only on a later quote, never retrospectively.",
+    leaders: "OKX lead traders", leadersHint: "Public OKX ranking for research. Past 90-day results are survivorship-biased and are not a recommendation to copy anyone.",
+    sort: "Sort by", minLeadDays: "Minimum track record", anyDays: "Any", days: "days", load: "Load ranking", loading: "Loading ranking…",
+    sorts: { pnl_ratio: "90-day return", pnl: "90-day PnL", win_ratio: "Win ratio", aum: "Assets under management", overview: "OKX overview" },
+    ret90: "90-day return", pnl90: "90-day PnL", winRatio: "Win ratio", leadDays: "Leading for", copiers: "Copiers",
+    capacity: "has free slots (copying availability unknown)", full: "no free slots", snapshot: "OKX snapshot", empty: "No traders match these filters."
   }),
   uk: Object.freeze({
     title: "Trading Lab", description: "Лише симуляція. Без реальних коштів чи угод на біржі.",
@@ -16,7 +21,12 @@ const COPY = Object.freeze({
     startingCash: "Стартові USDT", tradeNotional: "Обсяг угоди, USDT", fee: "Комісія (bps)",
     slippage: "Прослизання (bps)", allocation: "Макс. частка", submit: "Запустити симуляцію",
     pending: "Обчислення…", equity: "Умовний баланс", pnl: "Чистий PnL",
-    realized: "Реалізований PnL", fills: "Виконано", rejects: "Відхилено", hint: "Сигнал виконується лише за наступною котировкою, не заднім числом."
+    realized: "Реалізований PnL", fills: "Виконано", rejects: "Відхилено", hint: "Сигнал виконується лише за наступною котировкою, не заднім числом.",
+    leaders: "Лідери OKX", leadersHint: "Публічний рейтинг OKX для дослідження. Результати за 90 днів мають ефект виживання й не є порадою когось копіювати.",
+    sort: "Сортувати за", minLeadDays: "Мінімальний стаж", anyDays: "Будь-який", days: "днів", load: "Завантажити рейтинг", loading: "Завантаження рейтингу…",
+    sorts: { pnl_ratio: "Дохідність за 90 днів", pnl: "PnL за 90 днів", win_ratio: "Частка прибуткових", aum: "Активи в управлінні", overview: "Огляд OKX" },
+    ret90: "Дохідність за 90 днів", pnl90: "PnL за 90 днів", winRatio: "Частка прибуткових", leadDays: "Веде угоди", copiers: "Копіювальники",
+    capacity: "є вільні місця (чи відкрите копіювання — невідомо)", full: "вільних місць немає", snapshot: "Знімок OKX", empty: "Немає трейдерів за цими фільтрами."
   })
 });
 const DEMO = [
@@ -38,6 +48,103 @@ export function parseReplayEvents(jsonl) {
     if (!event || Array.isArray(event) || typeof event !== "object") throw new TypeError(`Line ${index + 1} must be an object`);
     return event;
   });
+}
+
+const SORTS = Object.freeze(["pnl_ratio", "pnl", "win_ratio", "aum", "overview"]);
+const LEAD_DAYS = Object.freeze(["", "7", "30", "90", "180"]);
+const DECIMAL = /^-?\d+(\.\d+)?$/;
+
+// Read-only leaderboard query; the bot and Trading Lab validate it again.
+export function leaderQuery({ sort = "pnl_ratio", minLeadDays = "", limit = 20 } = {}) {
+  if (!SORTS.includes(sort)) throw new RangeError("Unsupported sort");
+  if (!LEAD_DAYS.includes(String(minLeadDays))) throw new RangeError("Unsupported minimum track record");
+  if (!Number.isInteger(limit) || limit < 1 || limit > 20) throw new RangeError("Limit must be between 1 and 20");
+  const query = { sort, limit: String(limit) };
+  if (minLeadDays !== "") query.min_lead_days = String(minLeadDays);
+  return query;
+}
+
+// Formats a decimal ratio string ("1.6898" -> "+168.98%") by moving the decimal point, never through floats.
+export function formatPercent(ratio) {
+  const text = String(ratio ?? "");
+  if (!DECIMAL.test(text)) return "—";
+  const negative = text.startsWith("-");
+  const [whole, fraction = ""] = text.replace("-", "").split(".");
+  const digits = `${whole}${fraction.padEnd(2, "0")}`;
+  const point = whole.length + 2;
+  const integer = digits.slice(0, point).replace(/^0+(?=\d)/, "");
+  const decimals = digits.slice(point, point + 2).replace(/0+$/, "");
+  const value = decimals ? `${integer}.${decimals}` : integer;
+  if (/^0(\.0*)?$/.test(value)) return "0%";
+  return `${negative ? "−" : "+"}${value}%`;
+}
+
+export function formatAmount(amount) {
+  const text = String(amount ?? "");
+  if (!DECIMAL.test(text)) return "—";
+  const [whole, fraction = ""] = text.split(".");
+  const cents = fraction.slice(0, 2).replace(/0+$/, "");
+  return cents ? `${whole}.${cents}` : whole;
+}
+
+function mountLeaderboard(document, transport, t) {
+  const section = element(document, "section", null, "trading-leaders");
+  section.append(element(document, "h3", t.leaders), element(document, "p", t.leadersHint, "trading-hint"));
+  const form = element(document, "form", null, "trading-form");
+  const select = (label, values, text) => {
+    const field = element(document, "label", label);
+    const input = element(document, "select");
+    for (const value of values) {
+      const option = element(document, "option", text(value));
+      option.value = value;
+      input.append(option);
+    }
+    input.value = values[0];
+    field.append(input);
+    form.append(field);
+    return input;
+  };
+  const sort = select(t.sort, SORTS, (value) => t.sorts[value]);
+  const minLeadDays = select(t.minLeadDays, LEAD_DAYS, (value) => (value ? `${value} ${t.days}` : t.anyDays));
+  const submit = element(document, "button", t.load, "primary-action");
+  submit.type = "submit";
+  form.append(submit);
+  const status = element(document, "p", null, "trading-status");
+  status.setAttribute("role", "status");
+  status.setAttribute("aria-live", "polite");
+  const list = element(document, "ol", null, "trading-leader-list");
+  section.append(form, status, list);
+
+  let inFlight = false;
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (inFlight) return;
+    inFlight = true;
+    submit.disabled = true;
+    status.textContent = t.loading;
+    list.replaceChildren();
+    try {
+      const page = await transport.tradingLeaders(leaderQuery({ sort: sort.value, minLeadDays: minLeadDays.value }));
+      const traders = Array.isArray(page?.traders) ? page.traders : [];
+      for (const trader of traders) {
+        const item = element(document, "li", null, "trading-leader");
+        item.append(
+          element(document, "strong", String(trader.nickname || trader.unique_code || "—")),
+          element(document, "p", `${t.ret90}: ${formatPercent(trader.pnl_ratio_90d)} · ${t.pnl90}: ${formatAmount(trader.pnl_90d)} ${trader.margin_currency || "USDT"}`),
+          element(document, "p", `${t.winRatio}: ${formatPercent(trader.win_ratio).replace("+", "")} · ${t.leadDays}: ${Number.isInteger(trader.lead_days) ? trader.lead_days : "—"} ${t.days}`),
+          element(document, "p", `${t.copiers}: ${trader.copy_traders ?? "—"}/${trader.max_copy_traders ?? "—"} · ${trader.has_capacity ? t.capacity : t.full}`)
+        );
+        list.append(item);
+      }
+      status.textContent = traders.length ? `${t.snapshot}: ${String(page.data_version || "—")}` : t.empty;
+    } catch (error) {
+      status.textContent = String(error?.message || error);
+    } finally {
+      submit.disabled = false;
+      inFlight = false;
+    }
+  });
+  return section;
 }
 
 function element(document, tag, label, className) {
@@ -93,7 +200,9 @@ export function mountTradingWorkspace({ document, transport, locale = "en_US" })
   const result = element(document, "div", null, "trading-result");
   form.prepend(dataLabel, sample);
   form.append(submit);
-  root.append(header, form, status, result);
+  root.append(header);
+  if (typeof transport.tradingLeaders === "function") root.append(mountLeaderboard(document, transport, t));
+  root.append(form, status, result);
 
   let inFlight = false;
   form.addEventListener("submit", async (event) => {

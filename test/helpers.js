@@ -13,6 +13,7 @@ export class FakeElement {
   }
 
   append(...nodes) { this.children.push(...nodes); }
+  prepend(...nodes) { this.children.unshift(...nodes); }
   before(...nodes) { this.beforeNodes = [...(this.beforeNodes || []), ...nodes]; }
   add(node) { this.append(node); }
   replaceChildren(...nodes) { this.children = [...nodes]; }
