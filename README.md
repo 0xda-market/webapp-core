@@ -202,3 +202,7 @@ npm test
 ## Paper trading workspace
 
 Hosts with a trusted `replayTrading({ events, options })` transport method can mount `mountTradingWorkspace({ document, transport, locale })` as a `trading` workspace tab for all user roles. The shared UI owns the JSONL input, risk options and paper equity/PnL display; the host owns Telegram authentication and the private RPC to Trading Lab. No exchange order or wallet operation is exposed.
+
+If the transport also provides `tradingLeaders(query)`, the workspace shows a read-only **OKX lead traders** section above the replay form; without it the section is not rendered. `query` comes from `leaderQuery({ sort, minLeadDays, limit })`: `sort` is one of `pnl_ratio`, `pnl`, `win_ratio`, `aum`, `overview`; `minLeadDays` is `""`, `7`, `30`, `90` or `180`; `limit` is 1–20 (the UI uses the default 20). The method resolves to the Trading Lab page (`data_version`, `traders[]`). Traders render as text only. `has_capacity` is shown as free slots with copy availability unknown, and a missing value as unknown. The section carries a survivorship-bias disclaimer and offers no copy or order action.
+
+Public helpers: `leaderQuery`, `formatPercent` and `formatAmount` (decimal strings rounded half away from zero to 2 places with BigInt, never floats, with negative zero shown as `0`), and `formatDays` (locale plural forms). The `trading-leaders`, `trading-leader-list` and `trading-leader` classes are styled by the host.
