@@ -205,4 +205,12 @@ Hosts with a trusted `replayTrading({ events, options })` transport method can m
 
 If the transport also provides `tradingLeaders(query)`, the workspace shows a read-only **OKX lead traders** section above the replay form; without it the section is not rendered. `query` comes from `leaderQuery({ sort, minLeadDays, limit })`: `sort` is one of `pnl_ratio`, `pnl`, `win_ratio`, `aum`, `overview`; `minLeadDays` is `""`, `7`, `30`, `90` or `180`; `limit` is 1–20 (the UI uses the default 20). The method resolves to the Trading Lab page (`data_version`, `traders[]`). Traders render as text only. `has_capacity` is shown as free slots with copy availability unknown, and a missing value as unknown. The section carries a survivorship-bias disclaimer and offers no copy or order action.
 
-Public helpers: `leaderQuery`, `formatPercent` and `formatAmount` (decimal strings rounded half away from zero to 2 places with BigInt, never floats, with negative zero shown as `0`), and `formatDays` (locale plural forms). The `trading-leaders`, `trading-leader-list` and `trading-leader` classes are styled by the host.
+Public helpers: `leaderQuery`, `formatPercent` and `formatAmount` (decimal strings rounded half away from zero to 2 places with BigInt, never floats, with negative zero shown as `0`), and `formatDays` (locale plural forms). If the transport also provides `copyTrading({ uniqueCode, options })`, each ranked trader gets a **Simulate copying** button. It paper-copies that trader's real closed OKX positions of the last 3 months through Trading Lab `CopyReplay`. `options` reuse the replay form's `starting_cash`, `trade_notional`, `fee_bps` and `slippage_bps`. `copySummary(report, t)` renders the result as text lines:
+- the period and copied counts;
+- equity, return and net PnL;
+- fees, and the cost drag against a no-cost baseline;
+- the win rate and maximum drawdown;
+- rejections;
+- the model note: no leader leverage, the leader's prices, no delay.
+
+The `trading-leaders`, `trading-leader-list` `trading-leader`, `trading-copy`, `trading-copy-action` and `trading-copy-result` classes are styled by the host.
