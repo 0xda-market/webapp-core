@@ -13,7 +13,11 @@ const COPY = Object.freeze({
     sort: "Sort by", minLeadDays: "Minimum track record", anyDays: "Any", dayForms: { one: "day", other: "days" }, load: "Load ranking", loading: "Loading ranking…",
     sorts: { pnl_ratio: "90-day return", pnl: "90-day PnL", win_ratio: "Win ratio", aum: "Assets under management", overview: "OKX overview" },
     ret90: "90-day return", pnl90: "90-day PnL", winRatio: "Win ratio", leadDays: "Leading for", copiers: "Copiers",
-    capacity: "has free slots (copying availability unknown)", full: "no free slots", capacityUnknown: "free slots unknown", snapshot: "OKX snapshot", empty: "No traders match these filters."
+    capacity: "has free slots (copying availability unknown)", full: "no free slots", capacityUnknown: "free slots unknown", snapshot: "OKX snapshot", empty: "No traders match these filters.",
+    copy: "Simulate copying", copying: "Copying real trades on paper…", copyPeriod: "Period", copied: "copied", of: "of",
+    copyEquity: "Equity", copyFees: "Fees", costDrag: "Lost to costs", withoutCosts: "without costs",
+    copyWins: "Winning copies", drawdown: "Max drawdown", rejected: "rejected (not enough capital)",
+    copyModel: "Real closed OKX trades of the last 3 months, copied without the leader's leverage at the leader's prices plus fees and slippage. No delay is modelled; paper only."
   }),
   uk: Object.freeze({
     title: "Trading Lab", description: "Лише симуляція. Без реальних коштів чи угод на біржі.",
@@ -26,7 +30,11 @@ const COPY = Object.freeze({
     sort: "Сортувати за", minLeadDays: "Мінімальний стаж", anyDays: "Будь-який", dayForms: { one: "день", few: "дні", many: "днів", other: "дня" }, load: "Завантажити рейтинг", loading: "Завантаження рейтингу…",
     sorts: { pnl_ratio: "Дохідність за 90 днів", pnl: "PnL за 90 днів", win_ratio: "Частка прибуткових", aum: "Активи в управлінні", overview: "Огляд OKX" },
     ret90: "Дохідність за 90 днів", pnl90: "PnL за 90 днів", winRatio: "Частка прибуткових", leadDays: "Веде угоди", copiers: "Копіювальники",
-    capacity: "є вільні місця (чи відкрите копіювання — невідомо)", full: "вільних місць немає", capacityUnknown: "наявність місць невідома", snapshot: "Знімок OKX", empty: "Немає трейдерів за цими фільтрами."
+    capacity: "є вільні місця (чи відкрите копіювання — невідомо)", full: "вільних місць немає", capacityUnknown: "наявність місць невідома", snapshot: "Знімок OKX", empty: "Немає трейдерів за цими фільтрами.",
+    copy: "Симулювати копіювання", copying: "Копіюю реальні угоди на папері…", copyPeriod: "Період", copied: "скопійовано", of: "з",
+    copyEquity: "Капітал", copyFees: "Комісії", costDrag: "Втрачено на витратах", withoutCosts: "без витрат",
+    copyWins: "Прибуткових копій", drawdown: "Макс. просідання", rejected: "відхилено (бракує капіталу)",
+    copyModel: "Реальні закриті угоди OKX за 3 місяці, скопійовані без плеча лідера за його цінами з комісією та прослизанням. Затримка не моделюється; лише симуляція."
   })
 });
 const DEMO = [
@@ -111,7 +119,47 @@ function capacityText(trader, t) {
   return t.capacityUnknown;
 }
 
-function mountLeaderboard(document, transport, t, locale) {
+// Renders a paper copy of one lead trader's real closed positions (trading-lab CopyReplay).
+export function copySummary(report, t) {
+  const day = (value) => String(value || "—").slice(0, 10);
+  const lines = [
+    `${t.copyPeriod}: ${day(report?.period?.from)} — ${day(report?.period?.to)} · ${t.copied} ${report?.copied ?? "—"} ${t.of} ${report?.positions ?? "—"}`,
+    `${t.copyEquity}: ${formatAmount(report?.equity)} USDT (${formatPercent(report?.return)}) · PnL ${formatAmount(report?.net_pnl)}`,
+    `${t.copyFees}: ${formatAmount(report?.fees)} · ${t.costDrag}: ${formatAmount(report?.cost_drag)} (${t.withoutCosts}: ${formatAmount(report?.baseline_pnl)})`,
+    `${t.copyWins}: ${formatPercent(report?.win_rate).replace("+", "")} · ${t.drawdown}: ${formatPercent(report?.max_drawdown).replace("+", "")}`
+  ];
+  if (Number(report?.rejected) > 0) lines.push(`${report.rejected} ${t.rejected}`);
+  lines.push(t.copyModel);
+  return lines;
+}
+
+function copyControl(document, transport, t, trader, copyOptions) {
+  const box = element(document, "div", null, "trading-copy");
+  const button = element(document, "button", t.copy, "trading-copy-action");
+  button.type = "button";
+  const output = element(document, "div", null, "trading-copy-result");
+  output.setAttribute("aria-live", "polite");
+  box.append(button, output);
+  let busy = false;
+  button.addEventListener("click", async () => {
+    if (busy) return;
+    busy = true;
+    button.disabled = true;
+    output.replaceChildren(element(document, "p", t.copying));
+    try {
+      const report = await transport.copyTrading({ uniqueCode: trader.unique_code, options: copyOptions() });
+      output.replaceChildren(...copySummary(report, t).map((line) => element(document, "p", line)));
+    } catch (error) {
+      output.replaceChildren(element(document, "p", String(error?.message || error)));
+    } finally {
+      button.disabled = false;
+      busy = false;
+    }
+  });
+  return box;
+}
+
+function mountLeaderboard(document, transport, t, locale, copyOptions) {
   const section = element(document, "section", null, "trading-leaders");
   section.append(element(document, "h3", t.leaders), element(document, "p", t.leadersHint, "trading-hint"));
   const form = element(document, "form", null, "trading-form");
@@ -159,6 +207,9 @@ function mountLeaderboard(document, transport, t, locale) {
           element(document, "p", `${t.winRatio}: ${formatPercent(trader.win_ratio).replace("+", "")} · ${t.leadDays}: ${Number.isInteger(trader.lead_days) ? formatDays(trader.lead_days, locale) : "—"}`),
           element(document, "p", `${t.copiers}: ${trader.copy_traders ?? "—"}/${trader.max_copy_traders ?? "—"} · ${capacityText(trader, t)}`)
         );
+        if (typeof transport.copyTrading === "function" && typeof trader.unique_code === "string") {
+          item.append(copyControl(document, transport, t, trader, copyOptions));
+        }
         list.append(item);
       }
       status.textContent = traders.length ? `${t.snapshot}: ${String(page.data_version || "—")}` : t.empty;
@@ -227,7 +278,10 @@ export function mountTradingWorkspace({ document, transport, locale = "en_US" })
   form.prepend(dataLabel, sample);
   form.append(submit);
   root.append(header);
-  if (typeof transport.tradingLeaders === "function") root.append(mountLeaderboard(document, transport, t, locale));
+  // Copy simulations reuse the capital, size and cost fields of the replay form below.
+  const copyOptions = () => Object.fromEntries(["starting_cash", "trade_notional", "fee_bps", "slippage_bps"]
+    .map((key) => [key, inputs[key].value.trim()]));
+  if (typeof transport.tradingLeaders === "function") root.append(mountLeaderboard(document, transport, t, locale, copyOptions));
   root.append(form, status, result);
 
   let inFlight = false;

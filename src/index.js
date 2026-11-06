@@ -396,4 +396,4 @@ export { createAdminProductController, mountAdminCreateProduct } from "./admin-c
 export { createAdminPricingController, mountAdminPrices } from "./admin-prices.js";
 export { mountWorkspaceNavigation, workspaceSectionsForRole } from "./workspace-navigation.js";
 export * from "./engine.js";
-export { mountTradingWorkspace, parseReplayEvents, leaderQuery, formatPercent, formatAmount, formatDays } from "./trading-workspace.js";
+export { mountTradingWorkspace, parseReplayEvents, leaderQuery, formatPercent, formatAmount, formatDays, copySummary } from "./trading-workspace.js";
