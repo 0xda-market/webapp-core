@@ -109,13 +109,19 @@ export function mountMobileInputVisibility({
     if (event.target !== activeField) return;
     activeField = null;
     alignedForFocus = false;
-    setConfirmationVisible(false);
+    // Keep the tapped control visible through click, even if WebKit blurs first.
+    if (pressedField !== event.target) setConfirmationVisible(false);
   }
 
   function preserveFieldFocus(event) {
     // Keep the field even if iOS emits focusout before the confirmation click.
     pressedField = activeField || (isTextField(document.activeElement) ? document.activeElement : null);
     event.preventDefault?.();
+  }
+
+  function cancelConfirmationPress() {
+    pressedField = null;
+    if (!activeField) setConfirmationVisible(false);
   }
 
   function dismissActiveField() {
@@ -135,6 +141,7 @@ export function mountMobileInputVisibility({
   confirmationControl?.addEventListener?.("pointerdown", preserveFieldFocus);
   confirmationControl?.addEventListener?.("mousedown", preserveFieldFocus);
   confirmationControl?.addEventListener?.("click", dismissActiveField);
+  confirmationControl?.addEventListener?.("pointercancel", cancelConfirmationPress);
   setConfirmationVisible(false);
 
   const controller = Object.freeze({
@@ -147,6 +154,7 @@ export function mountMobileInputVisibility({
       confirmationControl?.removeEventListener?.("pointerdown", preserveFieldFocus);
       confirmationControl?.removeEventListener?.("mousedown", preserveFieldFocus);
       confirmationControl?.removeEventListener?.("click", dismissActiveField);
+      confirmationControl?.removeEventListener?.("pointercancel", cancelConfirmationPress);
       activeField = null;
       pressedField = null;
       alignedForFocus = false;
