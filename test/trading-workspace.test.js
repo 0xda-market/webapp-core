@@ -167,11 +167,32 @@ test("each ranked trader can be paper-copied with the form's capital and cost se
   assert.equal(button.textContent, "Симулювати копіювання");
   await button.dispatch("click");
   assert.deepEqual(calls, [{ uniqueCode: "811846999954962957",
-    options: { starting_cash: "500", trade_notional: "50", fee_bps: "10", slippage_bps: "5" } }]);
+    options: { starting_cash: "500", trade_notional: "50", fee_bps: "10", slippage_bps: "5", pricing: "leader", max_positions: "100" } }]);
   const output = texts(walk(section).find((node) => node.className === "trading-copy-result")).join(" | ");
   assert.match(output, /Капітал: 1143\.38 USDT \(\+14\.34%\)/);
   assert.match(output, /без плеча лідера/);
   assert.equal(button.disabled, false);
+});
+
+test("quote-priced copy remains explicitly opt-in and is bounded to five newest positions", async () => {
+  const calls = [];
+  const transport = {
+    replayTrading() {},
+    async tradingLeaders() { return { traders: [{ unique_code: "811846999954962957", nickname: "lead" }] }; },
+    async copyTrading(request) { calls.push(request); return { ...REPORT, pricing: "quotes" }; }
+  };
+  const { root } = mountTradingWorkspace({ document: fakeDocument, transport, locale: "uk_UA" });
+  const section = walk(root).find((node) => node.className === "trading-leaders");
+  const form = section.children.find((node) => node.tagName === "FORM");
+  const selectors = walk(form).filter((node) => node.tagName === "SELECT");
+  assert.equal(selectors[2].value, "leader", "optimistic quick preview is named as such");
+  selectors[2].value = "quotes";
+  await form.dispatch("submit");
+  await walk(section).find((node) => node.className === "trading-copy-action").dispatch("click");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].options.pricing, "quotes");
+  assert.equal(calls[0].options.max_positions, "5");
+  assert.match(texts(section).join(" "), /ринкові котирування після сигналу|Історичні ринкові котирування/i);
 });
 
 test("copy button is absent without host support and shows transport errors", async () => {
