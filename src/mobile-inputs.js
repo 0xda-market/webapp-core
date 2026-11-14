@@ -1,3 +1,6 @@
+// © 2026 aiaiaiai · aiaiaiai.org
+// SPDX-License-Identifier: MIT
+
 const TEXT_FIELD_SELECTOR = [
   'input:not([type="button"]):not([type="checkbox"]):not([type="hidden"]):not([type="radio"]):not([type="reset"]):not([type="submit"])',
   "textarea"
@@ -33,6 +36,8 @@ export function mountMobileInputVisibility({
   if (existing) return existing;
 
   let activeField = null;
+  let pressedField = null;
+  let alignedForFocus = false;
   let scheduled = false;
   const requestFrame = typeof windowTarget?.requestAnimationFrame === "function"
     ? (callback) => windowTarget.requestAnimationFrame(callback)
@@ -50,10 +55,13 @@ export function mountMobileInputVisibility({
   }
 
   function ensureVisible() {
-    if (!activeField || typeof activeField.getBoundingClientRect !== "function") return;
+    if (!activeField || alignedForFocus || typeof activeField.getBoundingClientRect !== "function") return;
     const bounds = viewportBounds(viewport);
     if (!bounds) {
-      activeField.scrollIntoView?.({ behavior: "smooth", block: "center", inline: "nearest" });
+      if (typeof activeField.scrollIntoView === "function") {
+        alignedForFocus = true;
+        activeField.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+      }
       return;
     }
 
@@ -68,9 +76,11 @@ export function mountMobileInputVisibility({
     if (!Number.isFinite(top) || Math.abs(top) < 1) return;
 
     if (typeof windowTarget?.scrollBy === "function") {
+      alignedForFocus = true;
       windowTarget.scrollBy({ top, left: 0, behavior: "smooth" });
-    } else {
-      activeField.scrollIntoView?.({ behavior: "smooth", block: "center", inline: "nearest" });
+    } else if (typeof activeField.scrollIntoView === "function") {
+      alignedForFocus = true;
+      activeField.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
     }
   }
 
@@ -86,7 +96,11 @@ export function mountMobileInputVisibility({
 
   function handleFocusIn(event) {
     if (!isTextField(event.target)) return;
-    activeField = event.target;
+    if (event.target !== activeField) {
+      activeField = event.target;
+      pressedField = null;
+      alignedForFocus = false;
+    }
     setConfirmationVisible(true);
     scheduleVisibilityCheck();
   }
@@ -94,16 +108,27 @@ export function mountMobileInputVisibility({
   function handleFocusOut(event) {
     if (event.target !== activeField) return;
     activeField = null;
-    setConfirmationVisible(false);
+    alignedForFocus = false;
+    // Keep the tapped control visible through click, even if WebKit blurs first.
+    if (pressedField !== event.target) setConfirmationVisible(false);
   }
 
   function preserveFieldFocus(event) {
+    // Keep the field even if iOS emits focusout before the confirmation click.
+    pressedField = activeField || pressedField || (isTextField(document.activeElement) ? document.activeElement : null);
     event.preventDefault?.();
   }
 
+  function cancelConfirmationPress() {
+    pressedField = null;
+    if (!activeField) setConfirmationVisible(false);
+  }
+
   function dismissActiveField() {
-    const field = activeField;
+    const field = activeField || pressedField || (isTextField(document.activeElement) ? document.activeElement : null);
     activeField = null;
+    pressedField = null;
+    alignedForFocus = false;
     setConfirmationVisible(false);
     field?.blur?.();
   }
@@ -116,6 +141,7 @@ export function mountMobileInputVisibility({
   confirmationControl?.addEventListener?.("pointerdown", preserveFieldFocus);
   confirmationControl?.addEventListener?.("mousedown", preserveFieldFocus);
   confirmationControl?.addEventListener?.("click", dismissActiveField);
+  confirmationControl?.addEventListener?.("pointercancel", cancelConfirmationPress);
   setConfirmationVisible(false);
 
   const controller = Object.freeze({
@@ -128,7 +154,10 @@ export function mountMobileInputVisibility({
       confirmationControl?.removeEventListener?.("pointerdown", preserveFieldFocus);
       confirmationControl?.removeEventListener?.("mousedown", preserveFieldFocus);
       confirmationControl?.removeEventListener?.("click", dismissActiveField);
+      confirmationControl?.removeEventListener?.("pointercancel", cancelConfirmationPress);
       activeField = null;
+      pressedField = null;
+      alignedForFocus = false;
       setConfirmationVisible(false);
       mountedDocuments.delete(document);
     }
