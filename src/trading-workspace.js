@@ -14,10 +14,13 @@ const COPY = Object.freeze({
     sorts: { pnl_ratio: "90-day return", pnl: "90-day PnL", win_ratio: "Win ratio", aum: "Assets under management", overview: "OKX overview" },
     ret90: "90-day return", pnl90: "90-day PnL", winRatio: "Win ratio", leadDays: "Leading for", copiers: "Copiers",
     capacity: "has free slots (copying availability unknown)", full: "no free slots", capacityUnknown: "free slots unknown", snapshot: "OKX snapshot", empty: "No traders match these filters.",
-    copy: "Simulate copying", copying: "Copying real trades on paper…", copyPeriod: "Period", copied: "copied", of: "of",
+    copy: "Simulate copying", copying: "Copying real trades on paper…",
+    copyPricing: "Simulation pricing", copyModes: { leader: "Quick estimate · leader prices (optimistic)", quotes: "Market quotes · latest 5 trades (slower)" },
+    copyModeHint: "Quick estimates ignore signal delay and cannot establish copyable profits. Market-quote replay is more realistic but may require longer processing.", copyPeriod: "Period", copied: "copied", of: "of",
     copyEquity: "Equity", copyFees: "Fees", costDrag: "Lost to costs", withoutCosts: "without costs",
     copyWins: "Winning copies", drawdown: "Max drawdown", rejected: "rejected (not enough capital)",
-    copyModel: "Real closed OKX trades of the last 3 months, copied without the leader's leverage at the leader's prices plus fees and slippage. No delay is modelled; paper only."
+    copyModel: "Optimistic baseline using the leader's prices without signal delay; not achievable copy execution. No leverage; includes fees and slippage. Paper only.",
+    copyModelQuotes: "Historical market quotes after the leader signal and follower delay; no leverage, with fees and slippage. Paper only."
   }),
   uk: Object.freeze({
     title: "Trading Lab", description: "Лише симуляція. Без реальних коштів чи угод на біржі.",
@@ -31,10 +34,13 @@ const COPY = Object.freeze({
     sorts: { pnl_ratio: "Дохідність за 90 днів", pnl: "PnL за 90 днів", win_ratio: "Частка прибуткових", aum: "Активи в управлінні", overview: "Огляд OKX" },
     ret90: "Дохідність за 90 днів", pnl90: "PnL за 90 днів", winRatio: "Частка прибуткових", leadDays: "Веде угоди", copiers: "Копіювальники",
     capacity: "є вільні місця (чи відкрите копіювання — невідомо)", full: "вільних місць немає", capacityUnknown: "наявність місць невідома", snapshot: "Знімок OKX", empty: "Немає трейдерів за цими фільтрами.",
-    copy: "Симулювати копіювання", copying: "Копіюю реальні угоди на папері…", copyPeriod: "Період", copied: "скопійовано", of: "з",
+    copy: "Симулювати копіювання", copying: "Копіюю реальні угоди на папері…",
+    copyPricing: "Ціни для симуляції", copyModes: { leader: "Швидка оцінка · ціни лідера (оптимістично)", quotes: "Ринкові котирування · останні 5 угод (повільніше)" },
+    copyModeHint: "Швидка оцінка не враховує затримку сигналу й не підтверджує можливість отримати цей прибуток. Ринкова симуляція реалістичніша, але може потребувати триваліших обчислень.", copyPeriod: "Період", copied: "скопійовано", of: "з",
     copyEquity: "Капітал", copyFees: "Комісії", costDrag: "Втрачено на витратах", withoutCosts: "без витрат",
     copyWins: "Прибуткових копій", drawdown: "Макс. просідання", rejected: "відхилено (бракує капіталу)",
-    copyModel: "Реальні закриті угоди OKX за 3 місяці, скопійовані без плеча лідера за його цінами з комісією та прослизанням. Затримка не моделюється; лише симуляція."
+    copyModel: "Оптимістична оцінка за цінами лідера без затримки сигналу: не є реально досяжною ціною копіювання. Без плеча, з комісією та прослизанням; лише симуляція.",
+    copyModelQuotes: "Історичні ринкові котирування після сигналу лідера та затримки копіювання. Без плеча, з комісією та прослизанням; лише симуляція."
   })
 });
 const DEMO = [
@@ -129,7 +135,7 @@ export function copySummary(report, t) {
     `${t.copyWins}: ${formatPercent(report?.win_rate).replace("+", "")} · ${t.drawdown}: ${formatPercent(report?.max_drawdown).replace("+", "")}`
   ];
   if (Number(report?.rejected) > 0) lines.push(`${report.rejected} ${t.rejected}`);
-  lines.push(t.copyModel);
+  lines.push(report?.pricing === "quotes" ? (t.copyModelQuotes || t.copyModel) : t.copyModel);
   return lines;
 }
 
@@ -178,6 +184,7 @@ function mountLeaderboard(document, transport, t, locale, copyOptions) {
   };
   const sort = select(t.sort, SORTS, (value) => t.sorts[value]);
   const minLeadDays = select(t.minLeadDays, LEAD_DAYS, (value) => (value ? formatDays(Number(value), locale) : t.anyDays));
+  const pricing = select(t.copyPricing, ["leader", "quotes"], (value) => t.copyModes[value]);
   const submit = element(document, "button", t.load, "primary-action");
   submit.type = "submit";
   form.append(submit);
@@ -185,7 +192,7 @@ function mountLeaderboard(document, transport, t, locale, copyOptions) {
   status.setAttribute("role", "status");
   status.setAttribute("aria-live", "polite");
   const list = element(document, "ol", null, "trading-leader-list");
-  section.append(form, status, list);
+  section.append(form, element(document, "p", t.copyModeHint, "trading-hint"), status, list);
 
   let inFlight = false;
   form.addEventListener("submit", async (event) => {
@@ -208,7 +215,9 @@ function mountLeaderboard(document, transport, t, locale, copyOptions) {
           element(document, "p", `${t.copiers}: ${trader.copy_traders ?? "—"}/${trader.max_copy_traders ?? "—"} · ${capacityText(trader, t)}`)
         );
         if (typeof transport.copyTrading === "function" && typeof trader.unique_code === "string") {
-          item.append(copyControl(document, transport, t, trader, copyOptions));
+          item.append(copyControl(document, transport, t, trader, () => ({
+            ...copyOptions(), pricing: pricing.value, max_positions: pricing.value === "quotes" ? "5" : "100"
+          })));
         }
         list.append(item);
       }
