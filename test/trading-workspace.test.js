@@ -170,7 +170,8 @@ test("each ranked trader can be paper-copied with the form's capital and cost se
     options: { starting_cash: "500", trade_notional: "50", fee_bps: "10", slippage_bps: "5", pricing: "leader", max_positions: "100" } }]);
   const output = texts(walk(section).find((node) => node.className === "trading-copy-result")).join(" | ");
   assert.match(output, /Капітал: 1143\.38 USDT \(\+14\.34%\)/);
-  assert.match(output, /без плеча лідера/);
+  assert.match(output, /Оптимістична оцінка/);
+  assert.match(output, /не є реально досяжною ціною копіювання/);
   assert.equal(button.disabled, false);
 });
 
