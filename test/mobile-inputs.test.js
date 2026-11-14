@@ -113,6 +113,7 @@ test("dismisses a focused field from a confirmation control above the keyboard",
   assert.equal(focusPreserved, true);
 
   document.dispatch("focusout", { target: field }); // iOS can emit focusout before click
+  assert.equal(confirmationControl.hidden, false, "keep control clickable until confirmation completes");
   confirmationControl.dispatch("click");
   assert.equal(blurCount, 1);
   assert.equal(confirmationControl.hidden, true);
@@ -145,6 +146,25 @@ test("confirmation only blurs the selected field, and later inputs can be focuse
   assert.equal(confirmationControl.hidden, false);
   confirmationControl.dispatch("click");
   assert.deepEqual(blurs, ["first", "second"]);
+  assert.equal(confirmationControl.hidden, true);
+  mounted.dispose();
+});
+
+test("a cancelled confirm press does not leave the control visible after focus is lost", () => {
+  const document = new EventSource();
+  const viewport = Object.assign(new EventSource(), { height: 800, offsetTop: 0 });
+  const windowTarget = Object.assign(new EventSource(), { requestAnimationFrame(callback) { callback(); } });
+  const confirmationControl = Object.assign(new EventSource(), { hidden: true, style: {} });
+  const field = {
+    matches(selector) { return selector.includes("input"); },
+    getBoundingClientRect() { return { top: 100, bottom: 140 }; }
+  };
+  const mounted = mountMobileInputVisibility({ document, viewport, windowTarget, confirmationControl });
+  document.dispatch("focusin", { target: field });
+  confirmationControl.dispatch("pointerdown", { preventDefault() {} });
+  document.dispatch("focusout", { target: field });
+  assert.equal(confirmationControl.hidden, false);
+  confirmationControl.dispatch("pointercancel");
   assert.equal(confirmationControl.hidden, true);
   mounted.dispose();
 });
