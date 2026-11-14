@@ -114,6 +114,7 @@ test("dismisses a focused field from a confirmation control above the keyboard",
 
   document.dispatch("focusout", { target: field }); // iOS can emit focusout before click
   assert.equal(confirmationControl.hidden, false, "keep control clickable until confirmation completes");
+  confirmationControl.dispatch("mousedown", { preventDefault() {} }); // compatibility mouse event must not clear the tapped field
   confirmationControl.dispatch("click");
   assert.equal(blurCount, 1);
   assert.equal(confirmationControl.hidden, true);
