@@ -115,7 +115,7 @@ export function mountMobileInputVisibility({
 
   function preserveFieldFocus(event) {
     // Keep the field even if iOS emits focusout before the confirmation click.
-    pressedField = activeField || (isTextField(document.activeElement) ? document.activeElement : null);
+    pressedField = activeField || pressedField || (isTextField(document.activeElement) ? document.activeElement : null);
     event.preventDefault?.();
   }
 
